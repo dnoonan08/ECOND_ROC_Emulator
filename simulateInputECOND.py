@@ -119,17 +119,20 @@ def generate_fast_commands(args):
         # assume ecr sent at unique globalBXs
         ecr_bxs = [int(ecr) for ecr in args.ecrBX.split(',')]
         fast_commands[ecr_bxs] = CMD_ECR
-        
-    if args.ebr and args.ebrBX!='':
-        ebr_bxs = [int(ebr) for ebr in args.ebrBX.split(',')]
-        print('send ebr ',ebr_bxs)
-        fast_commands[ebr_bxs] = CMD_EBR
-        
-    # add L1 accepts
+
     L1a_bxs,L1a_name = generate_L1a_fast_commands(args)
     fast_commands[L1a_bxs] = CMD_L1A
     num_events = len(L1a_bxs)
 
+    if args.ebr and args.ebrBX!='':
+        # fill array with bxs up to 3BXs after l1as
+        L1a_bxs_after4 = []
+        for i in range(3):
+            L1a_bxs_after4 += [bx+i+1 for bx in L1a_bxs if bx not in L1a_bxs_after4]
+        print('l1a bxs after 4 ',L1a_bxs_after4)
+        ebr_bxs = [int(ebr) for ebr in args.ebrBX.split(',') if int(ebr) not in L1a_bxs_after4]
+        fast_commands[ebr_bxs] = CMD_EBR
+        
     # command - orbit - bx - globalBx
     commands = [{'fc': fast_command,
                  'orbit': count_orbit(i,fast_command),
@@ -164,31 +167,30 @@ def make_dataset(args,num_events):
                 if word_type=='HDR':
                     word = 'HDR' # place-holder, so that we can replace with bx and orbit when L1A is called
                 elif word_type=='CM':
-                    if args.zerodata:
-                        word = '10'
-                        word += '{0:010b}'.format(0)
-                        word += '{0:010b}'.format(random.getrandbits(10)) # ADC-CM0                                                                                                                                                                                         
-                        word += '{0:010b}'.format(random.getrandbits(10)) # ADC-CM1                                                                                                                                                                                         
-                    else:
+                    if args.formatdata:
                         word = '{0:04b}'.format(packet_by_link[link_counter])
                         word += '{0:04b}'.format(link_counter+1)
                         word += '{0:08b}'.format(word_counter)
                         word += '{0:04b}'.format(packet_by_link[link_counter])
                         word += '{0:04b}'.format(link_counter+1)
                         word += '{0:08b}'.format(word_counter)
+                    else:
+                        word = '10'
+                        word += '{0:010b}'.format(0)
+                        word += '{0:010b}'.format(random.getrandbits(10)) # ADC-CM0
+                        word += '{0:010b}'.format(random.getrandbits(10)) # ADC-CM1                                                                                                                                                                                         
                 elif word_type=='IDLE':
                     word = '{0:032b}'.format(IDLEWORD_HEX) # assume non-bc0
                 else:
-                    if args.zerodata:
-                        # a zero 32-bit word                                                                                                                                                                                                            
-                        word = '{0:032b}'.format(0)
-                    else:
+                    if args.formatdata:
                         word = '{0:04b}'.format(packet_by_link[link_counter])
                         word += '{0:04b}'.format(link_counter+1)
                         word += '{0:08b}'.format(word_counter)
                         word += '{0:04b}'.format(packet_by_link[link_counter])
                         word += '{0:04b}'.format(link_counter+1)
                         word += '{0:08b}'.format(word_counter)
+                    else:
+                        word = '{0:032b}'.format(0)
 
                 #if word_type!='HDR' and word_type!='IDLE':
                 #    print('packet counter ',packet_counter,' link counter ',link_counter+1,' word counter ',word_counter,' word ',word)
@@ -308,7 +310,11 @@ def make_eportRX_input(args):
         # if EBR, then reset the event buffer
         if command_ == CMD_EBR:
             print('send ebr ',bx_counter,event_buffer,' buffer_counter ',buffer_counter)
-            if( (len(event_buffer)==1 and buffer_counter==0) or len(event_buffer)>1):
+            if buffer_counter>0:
+                event_buffer = [event_buffer[0]]
+                delay_buffer = [delay_buffer[0]]
+                event_counter = 0
+            else:
                 event_buffer = [] # not clear just get the first out?
                 delay_buffer = []
                 event_counter = 0
@@ -398,6 +404,8 @@ def make_eportRX_input(args):
         file_name += "_wecrBX" + args.ecrBX.replace(',','-')
     if args.ebr and args.ebrBX!='':
         file_name += "_webrBX" + args.ebrBX.replace(',','-')
+    if args.formatdata:
+        file_name += "_formatdata"
         
     output_file = open('rocData/%s.csv'%file_name, 'w')
     description = "# Provides a simple reset and then %i fast commands"%num_bx
@@ -406,7 +414,7 @@ def make_eportRX_input(args):
         description += "# The data idle word will contain the special 0x9 header for BC0\n"
     else:
         description+="\n"
-        
+
     output_file.write(description)
     output_file.write("# "+",".join(channels)+"\n")
     output_file.write("# start\n")
@@ -437,7 +445,7 @@ if __name__=='__main__':
     parser.add_argument('--nL1a', type=str, default='', dest="nL1a", help="Length of L1A patterns sent")
     parser.add_argument('--L1a_freq', type=str, default='', dest="L1a_freq", help="Send L1As with a frequency of 1 in L1A_freq")
 
-    parser.add_argument('--zero-data',  action='store_true', default=False, dest="zerodata", help="send zero data in L1A")
+    parser.add_argument('--format-data',  action='store_true', default=False, dest="formatdata", help="send non-zero data in L1A")
     
     args = parser.parse_args()
 

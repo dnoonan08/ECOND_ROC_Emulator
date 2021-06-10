@@ -21,19 +21,30 @@ python3 simulateInputECOND.py -N 10692 --bcr --sequence random --ecr --ecrBX 905
 - ebr: event buffer reset, e.g.
   - 10692 fc with 2 L1as sent at a fixed frequency (50 BX) and a EBR sent after those events finish transmitting to ECON
   
-  ```python3 simulateInputECOND.py -N 10692 --bcr --sequence fixed --L1a_freq 50 --nL1a 1 --ebr --ebrBX 150```
+  ```python3 simulateInputECOND.py -N 10692 --bcr --sequence fixed --L1a_freq 50 --nL1a 2 --ebr --ebrBX 150```
   - 10692 fc with 3 L1as sent at a fixed frequency (50 BX) and a EBR sent in between those events 
   
-  ```python3 simulateInputECOND.py -N 10692 --bcr --sequence fixed --L1a_freq 50 --nL1a 2 --ebr --ebrBX 98```
+  ```python3 simulateInputECOND.py -N 10692 --bcr --sequence fixed --L1a_freq 50 --nL1a 3 --ebr --ebrBX 98```
   
-  - 10692 fc with 3 L1as sent at a fixed frequency (50 BX) and a EBR sent after the 2nd L1a is sent but before the ROC has begun transmitting that event. Then I send another L1A later.
+  - 10692 fc with 3 L1as sent at a fixed frequency (50 BX) and a EBR sent after the 2nd L1a is sent but before the ROC has begun transmitting that event. Then I send another L1a later.
   
-  ```python3 simulateInputECOND.py -N 10692 --bcr --sequence fixed --L1A_freq 50 --nL1a 2 --ebr --ebrBX 102```
+  ```python3 simulateInputECOND.py -N 10692 --bcr --sequence fixed --L1a_freq 50 --nL1a 3 --ebr --ebrBX 102```
+
+  -  10692 fc with 3 L1as sent at a fixed frequency (50 BX) and a EBR sent after the 2nd L1a is sent and after the 3 BXs.
+
+  ```python3 simulateInputECOND.py -N 10692 --bcr --sequence fixed --L1a_freq 50 --nL1a 3 --ebr --ebrBX 104```
   
   - 10692 fc with 3 L1as sent at a fixed frequency (50 BX) and a EBR sent after the 2nd L1a is sent and after the ROC has begun transmitting that event (the ROC is in the middle of reading that event - has only read word 1). Then I send another L1a later.
   
-  ```python3 simulateInputECOND.py -N 10692 --bcr --sequence fixed --L1a_freq 50 --nL1a 2 --ebr --ebrBX 108```
+  ```python3 simulateInputECOND.py -N 10692 --bcr --sequence fixed --L1a_freq 50 --nL1a 3 --ebr --ebrBX 108```
 
+  -  10692 fc with 3 L1as sent at a fixed frequency (1 BX) and an EBR sent after the 3 L1as, and after 3BXs from the first L1a but 7 BXs after the first L1a (i.e. exactly when starting the trasnmission).
+
+  ```python3 simulateInputECOND.py -N 10692 --bcr --sequence fixed --L1a_freq 1 --nL1a 3 --ebr --ebrBX 8```
+
+  - 10692 fc with 3 L1as sent at a fixed frequency (1 BX) and an EBR sent after the 3 L1as, and after 3BXs and 7 BXs of the first L1a.
+
+  ```python3 simulateInputECOND.py -N 10692 --bcr --sequence fixed --L1a_freq 1 --nL1a 3 --ebr --ebrBX 12```
 
 #### Formated dataset
 We have 32 bits, broken down into two sets of 16.  We can further break down the 16 into a set of 4 bits for counting, a set of 4 bits for eLink Number and a set of 8 bits for packet word number.
