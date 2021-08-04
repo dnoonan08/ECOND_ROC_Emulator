@@ -18,13 +18,14 @@ import glob
 # - l1a: send this number of L1As
 # - l1a-freq: send 1 L1As in l1a-freq BXs
 #
+#
 ###############################################
 
 # global parameters
 ORBITLAST = 3564
 ORBITBCR = ORBITLAST - 50
 
-# commands
+# fast commands
 CMD_IDLE = "FASTCMD_IDLE"
 CMD_L1A = "FASTCMD_L1A"
 CMD_BCR = "FASTCMD_BCR"
@@ -33,20 +34,22 @@ CMD_ECR = "FASTCMD_ECR"
 CMD_EBR = "FASTCMD_EBR"
 CMD_ALLONE = "FASTCMD_ALLONE"
 
-# daq words format
-# 41 words (32 bits each) - 40 BX + IDLE
-# each word is separated by _ and takes 1 BX to read (32 bit word: 1.8 gHz: 32* 40MHz)
-# HDR (header) + CM (common mode) + CH_i i:0-37 (36 channels + calibration) + CRC (checksum) + IDLE
-# HDR: 0101 + 12bit Bx# + 6bit Event# + 3bit Orbit# + 1bit H1status + 1bit H2status + 1bitH3status + 0101
-# CM: 10 + 10bit + 10bitADC(CM0) + 10bitADC(CM1)
-# IDLE: continuosly sent out when no L1A
+"""
+DAQ words: 41 words (32 bits each)
+  each word string is separated by _ and takes 1 BX to read (32 bit word: 1.8 gHz: 32* 40MHz)
+  nBXs: 40BX  + IDLE_WORD = 41 BX
+  HDR (header) + CM (common mode) + CH_i i:0-37 (36 channels + calibration) + CRC (checksum) + IDLE
+  HDR: 0101 + 12bit Bx# + 6bit Event# + 3bit Orbit# + 1bit H1status + 1bit H2status + 1bitH3status + 0101
+  CM: 10 + 10bit + 10bitADC(CM0) + 10bitADC(CM1)
+  IDLE: continuosly sent out when no L1A
+"""
 DATAWORDS = 'HDR_'+'CM_'
 for i in range(37): DATAWORDS += 'CH%i_'%i
 DATAWORDS += 'CRC_' + 'IDLE'
 NWORDS = len(DATAWORDS.split('_'))
 NELINKS = 12
 
-# words
+# HEX pre-defined words
 IDLEWORD_HEX = 0xaccccccc
 IDLEWORD_BC0 = '9CCCCCCC'
 IDLEWORD = 'ACCCCCCC'
@@ -129,7 +132,7 @@ def generate_fast_commands(args):
         L1a_bxs_after4 = []
         for i in range(3):
             L1a_bxs_after4 += [bx+i+1 for bx in L1a_bxs if bx not in L1a_bxs_after4]
-        print('l1a bxs after 4 ',L1a_bxs_after4)
+        # print('l1a bxs after 4 ',L1a_bxs_after4)
         ebr_bxs = [int(ebr) for ebr in args.ebrBX.split(',') if int(ebr) not in L1a_bxs_after4]
         fast_commands[ebr_bxs] = CMD_EBR
         
@@ -162,7 +165,7 @@ def make_dataset(args,num_events):
             subdet,zside,layer,waferu,waferv = 0,5,1,3,1
 
         # load dataframe, with formatted words
-        mcDataDF = loadMCData(subdet=subdet, zside=zside, layer=layer, waferu=waferu, waferv=waferv)
+        mcDataDF = loadMCData(fName=args.fname, subdet=subdet, zside=zside, layer=layer, waferu=waferu, waferv=waferv)
 
         # get list of entries that are present in the dataframe
         # then pick a random set to use at the L1A data
@@ -172,29 +175,32 @@ def make_dataset(args,num_events):
     for event_counter in range(num_events):
         words = DATAWORDS.split('_')
 
+        # packet count: from 0 to 15 and then rolls over
+        # 4 bit: 0000 to 1111 (from 0 to 15)
         if packet_counter==16: packet_counter = 0
         
         data_by_link = dict()
-        for link_counter in range(NELINKS):
+        for link_counter in range(NELINKS): # link counter 
             data_by_link[link_counter] = []
-            	
+
+            # word counter: 0-41
             for word_counter,word_type in enumerate(words):
                 
                 if word_type=='HDR':
                     word = 'HDR' # place-holder, so that we can replace with bx and orbit when L1A is called
                 elif word_type=='CM':
-                    if args.formatdata:
-                        word = '{0:04b}'.format(packet_counter)
-                        word += '{0:04b}'.format(link_counter+1)
-                        word += '{0:08b}'.format(word_counter)
-                        word += '{0:04b}'.format(packet_counter)
-                        word += '{0:04b}'.format(link_counter+1)
-                        word += '{0:08b}'.format(word_counter)
-                    else:
+                    if args.physicsdata or args.zerodata:
                         word = '10'
                         word += '{0:010b}'.format(0)
                         word += '{0:010b}'.format(random.getrandbits(10)) # ADC-CM0
-                        word += '{0:010b}'.format(random.getrandbits(10)) # ADC-CM1                                                                                                                                                                                         
+                        word += '{0:010b}'.format(random.getrandbits(10)) # ADC-CM1
+                    else:
+                        word = '{0:04b}'.format(packet_counter) # 4b count number
+                        word += '{0:04b}'.format(link_counter+1) # 4b elink number
+                        word += '{0:08b}'.format(word_counter) # 8b packet word
+                        word += '{0:04b}'.format(packet_counter)
+                        word += '{0:04b}'.format(link_counter+1)
+                        word += '{0:08b}'.format(word_counter)
                 elif word_type=='IDLE':
                     word = '{0:032b}'.format(IDLEWORD_HEX) # assume non-bc0
                 elif word_type=='CRC':
@@ -213,16 +219,14 @@ def make_dataset(args,num_events):
                         word += '{0:04b}'.format(packet_counter)
                         word += '{0:04b}'.format(link_counter+1)
                         word += '{0:08b}'.format(word_counter)
-                    else:
-                        word = '{0:032b}'.format(0)
 
-                if word_type!='HDR' and word_type!='IDLE':
-                    print('packet counter ',packet_counter,' link counter ',link_counter+1,' word counter ',word_counter,' word ',word)
-                else:
-                    print('word_type ',word_type)
+                # if word_type!='HDR' and word_type!='IDLE':
+                #     print('packet counter ',packet_counter,' link counter ',link_counter+1,' word counter ',word_counter,' word ',word)
+                # else:
+                #     print('word_type ',word_type)
                 data_by_link[link_counter].append(word)
 
-        # increase packet counter by event
+        # increase packet counter after a full 12 e-link packet is sent
         packet_counter += 1
                 
         roc_buffer.append(data_by_link)
@@ -334,7 +338,7 @@ def make_eportRX_input(args):
 
         # if EBR, then reset the event buffer
         if command_ == CMD_EBR:
-            print('send ebr ',bx_counter,event_buffer,' buffer_counter ',buffer_counter)
+            #print('send ebr ',bx_counter,event_buffer,' buffer_counter ',buffer_counter)
             if buffer_counter>0:
                 event_buffer = [event_buffer[0]]
                 delay_buffer = [delay_buffer[0]]
@@ -343,7 +347,7 @@ def make_eportRX_input(args):
                 event_buffer = [] # not clear just get the first out?
                 delay_buffer = []
                 event_counter = 0
-            print(event_buffer)
+            #print(event_buffer)
 
         # replace num_bx with the last event to read
         if len(delay_buffer)>0 and delay_buffer[-1]['end']>=args.N:
@@ -376,7 +380,8 @@ def make_eportRX_input(args):
                         word += '{0:01b}'.format(random.getrandbits(1)) #H3
                         word += '0101'
 
-                    if link_counter==2: print(word)
+                    # debug for elink2
+                    # if link_counter==2: print(word)
                     word = '{0:08X}'.format(int(word,base=2))
                     roc_data_by_link[link_counter].append(word)
 
@@ -429,8 +434,8 @@ def make_eportRX_input(args):
         file_name += "_wecrBX" + args.ecrBX.replace(',','-')
     if args.ebr and args.ebrBX!='':
         file_name += "_webrBX" + args.ebrBX.replace(',','-')
-    if args.formatdata:
-        file_name += "_formatdata"
+    if args.physicsdata:
+        file_name += "_physicsdata"
         
     output_file = open('rocData/%s.csv'%file_name, 'w')
     description = "# Provides a simple reset and then %i fast commands"%num_bx
@@ -473,8 +478,8 @@ if __name__=='__main__':
     parser.add_argument('--physics-data',  action='store_true', default=False, dest="physicsdata", help="use physics data from MC in L1A")
     
     parser.add_argument('--waferCoor', type=str, default="0,1,5,3,1", dest='waferCoordinates', help='coordinates of wafer to data to load from MC: subdet,zside,layer,waferU,waferV; as a comma separated list')
+    parser.add_argument('--fname', type=str, default='', dest="fname", help="MC filename")
     
     args = parser.parse_args()
 
     make_eportRX_input(args)
-    
