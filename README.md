@@ -14,6 +14,16 @@ python3 simulateInputECOND.py -N 10692 --bcr --sequence fixed --L1a_freq 50 --nL
 ```
 note that `fixed` needs L1a_freq and nL1a
 
+- to send data taken from MC events:
+```
+python3 simulateInputECOND.py -N 10692 --bcr --sequence fixed --L1a_freq 50 --nL1a 3 --physics-data
+```
+data is taken from MC ntuple, loading for a single wafer (default subdet=0, zside=1, layer=5, U=3, V=1).  Detector location can be changed with `--waferCoor` argument
+```
+python3 simulateInputECOND.py -N 10692 --bcr --sequence fixed --L1a_freq 50 --nL1a 3 --physics-data --waferCoor 0,1,9,3,5
+```
+where argument is a comma separated list of subdet,zside,layer,waferU,waferV coordinates to read from
+
 - ecr: event counter reset, e.g.:
 ```
 python3 simulateInputECOND.py -N 10692 --bcr --sequence random --ecr --ecrBX 9050 

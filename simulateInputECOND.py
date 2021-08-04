@@ -144,7 +144,31 @@ def generate_fast_commands(args):
 def make_dataset(args,num_events):
     packet_counter = 0
     roc_buffer = []
-        
+
+    if args.physicsdata:
+        from getElinkInputDataFromMC import loadMCData
+
+        # try parsing the wafer coordinates
+        try:
+            subdet,zside,layer,waferu,waferv=eval(args.waferCoordinates)
+        except:
+            print('#'*20)
+            print('#'*20)
+            print(f'Unable to parse wafer coordinates ({args.waferCoordinates}) for (subdet,zside,layer,waferu,waferv)')
+            print('   Falling back to default values')
+            print('      (0,5,1,3,1)')
+            print('#'*20)
+            print('#'*20)
+            subdet,zside,layer,waferu,waferv = 0,5,1,3,1
+
+        # load dataframe, with formatted words
+        mcDataDF = loadMCData(subdet=subdet, zside=zside, layer=layer, waferu=waferu, waferv=waferv)
+
+        # get list of entries that are present in the dataframe
+        # then pick a random set to use at the L1A data
+        entryList = mcDataDF.index.levels[0].values
+        l1Aevents = np.random.choice(entryList,num_events)
+
     for event_counter in range(num_events):
         words = DATAWORDS.split('_')
 
@@ -173,8 +197,16 @@ def make_dataset(args,num_events):
                         word += '{0:010b}'.format(random.getrandbits(10)) # ADC-CM1                                                                                                                                                                                         
                 elif word_type=='IDLE':
                     word = '{0:032b}'.format(IDLEWORD_HEX) # assume non-bc0
+                elif word_type=='CRC':
+                    # add random CRC bits for now (todo: implement real CRC calculation)
+                    word = '{0:032b}'.format(random.getrandbits(32)) 
                 else:
-                    if args.formatdata:
+                    if args.zerodata:
+                        # a zero 32-bit word                                                                                                                                                                                                            
+                        word = '{0:032b}'.format(0)
+                    elif args.physicsdata:
+                        word = mcDataDF.loc[(l1Aevents[event_counter],link_counter),word_type]
+                    else:
                         word = '{0:04b}'.format(packet_counter)
                         word += '{0:04b}'.format(link_counter+1)
                         word += '{0:08b}'.format(word_counter)
@@ -437,8 +469,10 @@ if __name__=='__main__':
     parser.add_argument('--sequence', type=str, default='', dest="sequence", help="Sequence of L1A patterns to send (separated by ,)")
     parser.add_argument('--nL1a', type=str, default='', dest="nL1a", help="Length of L1A patterns sent")
     parser.add_argument('--L1a_freq', type=str, default='', dest="L1a_freq", help="Send L1As with a frequency of 1 in L1A_freq")
-
-    parser.add_argument('--format-data',  action='store_true', default=False, dest="formatdata", help="send non-zero data in L1A")
+    parser.add_argument('--zero-data',  action='store_true', default=False, dest="zerodata", help="send zero data in L1A")
+    parser.add_argument('--physics-data',  action='store_true', default=False, dest="physicsdata", help="use physics data from MC in L1A")
+    
+    parser.add_argument('--waferCoor', type=str, default="0,1,5,3,1", dest='waferCoordinates', help='coordinates of wafer to data to load from MC: subdet,zside,layer,waferU,waferV; as a comma separated list')
     
     args = parser.parse_args()
 
