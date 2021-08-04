@@ -142,36 +142,28 @@ def generate_fast_commands(args):
     return commands,L1a_name,num_events
 
 def make_dataset(args,num_events):
-    packet_by_link = dict()
     packet_counter = 0
-    for link_counter in range(NELINKS):
-        packet_by_link[link_counter] = 0
-
     roc_buffer = []
         
     for event_counter in range(num_events):
         words = DATAWORDS.split('_')
 
+        if packet_counter==16: packet_counter = 0
+        
         data_by_link = dict()
         for link_counter in range(NELINKS):
             data_by_link[link_counter] = []
             	
             for word_counter,word_type in enumerate(words):
                 
-                # reset packet counter (0-15 range to fit in 4 bits)
-                if packet_counter==16: packet_counter = 0
-                
-                if word_type=='HDR':
-                    packet_by_link[link_counter] = packet_counter
-                    
                 if word_type=='HDR':
                     word = 'HDR' # place-holder, so that we can replace with bx and orbit when L1A is called
                 elif word_type=='CM':
                     if args.formatdata:
-                        word = '{0:04b}'.format(packet_by_link[link_counter])
+                        word = '{0:04b}'.format(packet_counter)
                         word += '{0:04b}'.format(link_counter+1)
                         word += '{0:08b}'.format(word_counter)
-                        word += '{0:04b}'.format(packet_by_link[link_counter])
+                        word += '{0:04b}'.format(packet_counter)
                         word += '{0:04b}'.format(link_counter+1)
                         word += '{0:08b}'.format(word_counter)
                     else:
@@ -183,22 +175,23 @@ def make_dataset(args,num_events):
                     word = '{0:032b}'.format(IDLEWORD_HEX) # assume non-bc0
                 else:
                     if args.formatdata:
-                        word = '{0:04b}'.format(packet_by_link[link_counter])
+                        word = '{0:04b}'.format(packet_counter)
                         word += '{0:04b}'.format(link_counter+1)
                         word += '{0:08b}'.format(word_counter)
-                        word += '{0:04b}'.format(packet_by_link[link_counter])
+                        word += '{0:04b}'.format(packet_counter)
                         word += '{0:04b}'.format(link_counter+1)
                         word += '{0:08b}'.format(word_counter)
                     else:
                         word = '{0:032b}'.format(0)
 
-                #if word_type!='HDR' and word_type!='IDLE':
-                #    print('packet counter ',packet_counter,' link counter ',link_counter+1,' word counter ',word_counter,' word ',word)
-                #else:
-                #    print('word_type ',word_type)
+                if word_type!='HDR' and word_type!='IDLE':
+                    print('packet counter ',packet_counter,' link counter ',link_counter+1,' word counter ',word_counter,' word ',word)
+                else:
+                    print('word_type ',word_type)
                 data_by_link[link_counter].append(word)
 
-            packet_counter += 1
+        # increase packet counter by event
+        packet_counter += 1
                 
         roc_buffer.append(data_by_link)
 
@@ -351,7 +344,7 @@ def make_eportRX_input(args):
                         word += '{0:01b}'.format(random.getrandbits(1)) #H3
                         word += '0101'
 
-                    # if link_counter==2: print(word)
+                    if link_counter==2: print(word)
                     word = '{0:08X}'.format(int(word,base=2))
                     roc_data_by_link[link_counter].append(word)
 
