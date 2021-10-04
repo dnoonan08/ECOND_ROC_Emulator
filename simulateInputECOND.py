@@ -182,7 +182,6 @@ def make_dataset(args,num_events):
         data_by_link = dict()
         for link_counter in range(NELINKS): # link counter 
             data_by_link[link_counter] = []
-
             # word counter: 0-41
             for word_counter,word_type in enumerate(words):
                 
@@ -204,11 +203,10 @@ def make_dataset(args,num_events):
                 elif word_type=='IDLE':
                     word = '{0:032b}'.format(IDLEWORD_HEX) # assume non-bc0
                 elif word_type=='CRC':
-                    # add random CRC bits for now (todo: implement real CRC calculation)
-                    word = '{0:032b}'.format(random.getrandbits(32)) 
+                    word = 'CRC'
                 else:
                     if args.zerodata:
-                        # a zero 32-bit word                                                                                                                                                                                                            
+                        # a zero 32-bit word
                         word = '{0:032b}'.format(0)
                     elif args.physicsdata:
                         word = mcDataDF.loc[(l1Aevents[event_counter],link_counter),word_type]
@@ -228,7 +226,7 @@ def make_dataset(args,num_events):
 
         # increase packet counter after a full 12 e-link packet is sent
         packet_counter += 1
-                
+
         roc_buffer.append(data_by_link)
 
     return roc_buffer
@@ -334,7 +332,7 @@ def make_eportRX_input(args):
             
         # if ECR, then reset the event counter 
         if command_ == CMD_ECR:
-            event_counter = 0
+            event_counter = 1
 
         # if EBR, then reset the event buffer
         if command_ == CMD_EBR:
@@ -342,11 +340,11 @@ def make_eportRX_input(args):
             if buffer_counter>0:
                 event_buffer = [event_buffer[0]]
                 delay_buffer = [delay_buffer[0]]
-                event_counter = 0
+                event_counter = 1
             else:
                 event_buffer = [] # not clear just get the first out?
                 delay_buffer = []
-                event_counter = 0
+                event_counter = 1
             #print(event_buffer)
 
         # replace num_bx with the last event to read
@@ -367,21 +365,31 @@ def make_eportRX_input(args):
             if bx_counter>=start_read and bx_counter<=end_read:
                 # print(bx_counter,'reading',bx_read,' length of evt buffer ',len(event_buffer[0]))
 
+                # header word
+                header_word = '0101'
+                header_word +=  '{0:012b}'.format(bx & 0b111111111111) # bx
+                header_word += '{0:06b}'.format(event_counter & 0b111111) # event
+                header_word += '{0:03b}'.format(orbit & 0b111) # orbit
+                header_word += '{0:01b}'.format(random.getrandbits(1)) # H1
+                header_word += '{0:01b}'.format(random.getrandbits(1)) # H2
+                header_word += '{0:01b}'.format(random.getrandbits(1)) # H3
+                header_word += '0101'
+
                 # convert to hex
                 for link_counter in range(NELINKS):
                     word = roc_buffer_by_link[event_read][link_counter][buffer_counter]
                     if word=='HDR':
-                        word ='0101'
-                        word += '{0:012b}'.format(bx & 0b111111111111) # bx
-                        word += '{0:06b}'.format(event_counter & 0b111111) # event
-                        word += '{0:03b}'.format(orbit & 0b111) # orbit
-                        word += '{0:01b}'.format(random.getrandbits(1)) #H1
-                        word += '{0:01b}'.format(random.getrandbits(1)) #H2
-                        word += '{0:01b}'.format(random.getrandbits(1)) #H3
-                        word += '0101'
-
+                        word = header_word
+                    # calculate the CRC (polynomial 0x104c11db7) for full list of daq words (input last 32 bit packet with data)
+                    if word=='CRC':
+                        daqvals = [header_word if w=='HDR' else w for w in roc_buffer_by_link[event_read][link_counter][0:39]]
+                        import crcmod,codecs
+                        crc = crcmod.mkCrcFun(0x104c11db7,initCrc=0, xorOut=0, rev=False)
+                        crcword = crc(codecs.decode((''.join(daqvals)), 'hex'))
+                        word = '{0:032b}'.format(crcword)
+                        # print('CRC ',crcword,hex(crcword),word)
                     # debug for elink2
-                    # if link_counter==2: print(word)
+                    #if link_counter==2: print(word)
                     word = '{0:08X}'.format(int(word,base=2))
                     roc_data_by_link[link_counter].append(word)
 

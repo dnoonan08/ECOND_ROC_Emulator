@@ -3,7 +3,7 @@ import pandas as pd
 
 import awkward as ak
 
-##load and skim dataframe a few events at a time (more memory efficient)
+# load and skim dataframe a few events at a time (more memory efficient)
 def getDF(_tree, entrysteps=10, subdet=0, zside=1, layer=9, u=3, v=3):
     t = []
     branches=['hgcdigi_subdet','hgcdigi_zside','hgcdigi_layer','hgcdigi_waferu','hgcdigi_waferv','hgcdigi_cellu','hgcdigi_cellv','hgcdigi_wafertype','hgcdigi_data_BX1','hgcdigi_isadc_BX1','hgcdigi_data_BX2','hgcdigi_isadc_BX2','hgcdigi_toa_BX2']
@@ -18,23 +18,23 @@ def formatData(x):
     isTOT = 1-x.isadc
     
     tp = 0
-    ### assign tp randomly??? right now, just use isadc-1
+    # assign tp randomly??? right now, just use isadc-1
     tp = 1-x.isadcm1
     
-    ## build 32 bit word
+    # build 32 bit word
     data = (isTOT<<31) + (tp<<30) + (x.adcm1<<20) + (x.cellData<<10) + (x.toa)
     return data
 
 
 def loadMCData(fName = 'root://cmseos.fnal.gov//store/user/lpchgcal/ConcentratorNtuples/L1THGCal_Ntuples/DAQ_Data/TTbar_SampleFile/ntuple.root',
-             outputName=None,
-             subdet=0,
-             zside=1,
-             layer=5,
-             waferu=3,
-             waferv=1,
-             dataType='bin',
-             returnCellDF=False):
+               outputName=None,
+               subdet=0,
+               zside=1,
+               layer=5,
+               waferu=3,
+               waferv=1,
+               dataType='bin',
+               returnCellDF=False):
 
 
     #load tree
@@ -77,7 +77,6 @@ def loadMCData(fName = 'root://cmseos.fnal.gov//store/user/lpchgcal/Concentrator
         dfLinks = df.FormattedData.unstack(fill_value=0)
 
     dfLinks.columns = [f'CH{i}' for i in range(37)]
-
 
     if not outputName is None:
         dfLinks.to_csv(outputName)
