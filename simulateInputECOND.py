@@ -172,7 +172,7 @@ def make_dataset(args,num_events):
         entryList = mcDataDF.index.levels[0].values
         l1Aevents = np.random.choice(entryList,num_events)
 
-    for event_counter in range(num_events):
+    for ev_counter in range(num_events):
         words = DATAWORDS.split('_')
 
         # packet count: from 0 to 15 and then rolls over
@@ -209,7 +209,7 @@ def make_dataset(args,num_events):
                         # a zero 32-bit word
                         word = '{0:032b}'.format(0)
                     elif args.physicsdata:
-                        word = mcDataDF.loc[(l1Aevents[event_counter],link_counter),word_type]
+                        word = mcDataDF.loc[(l1Aevents[ev_counter],link_counter),word_type]
                     else:
                         word = '{0:04b}'.format(packet_counter)
                         word += '{0:04b}'.format(link_counter+1)
@@ -235,54 +235,49 @@ def make_eportRX_input(args):
     
     # produce idle fast commands w. other fast commands
     commands, L1a_name, num_events = generate_fast_commands(args)
-    
+
+    # initialize counters
+    counters = {
+        'roc': 0,
+        'buffer': 0,
+        'event': 0,
+        }
+
     # output data
     channels = ['Hard reset', 'Soft reset']
     for link_counter in range(NELINKS): channels.append('Aligner Ch%i (32 bit)'%link_counter)
     channels.append('Fast Command (8 bit)')
 
+    def fill_by_channel(counters,hard_resets,soft_resets,link_data,commands):
+        by_channel = dict.fromkeys(channels)
+        by_channel['Hard reset'] = hard_resets
+        by_channel['Soft reset'] = soft_resets
+        for link_counter in range(NELINKS): by_channel['Aligner Ch%i (32 bit)'%link_counter] = link_data[link_counter]
+        by_channel['Fast Command (8 bit)'] = commands
+        counters['event'] = 1 if 0 in by_channel['Hard reset'] else counters['event']
+        return counters,by_channel
+
     # start
-    start_by_channel = dict.fromkeys(channels)
-    start_by_channel['Hard reset'] = [1]
-    start_by_channel['Soft reset'] = [1]
-    for link_counter in range(NELINKS): start_by_channel['Aligner Ch%i (32 bit)'%link_counter] = [IDLEWORD]
-    start_by_channel['Fast Command (8 bit)'] = [CMD_IDLE]
-
+    counters,start_by_channel = fill_by_channel(counters,[1],[1],[[IDLEWORD]]*NELINKS,[CMD_IDLE])
     # reset
-    reset_by_channel = dict.fromkeys(channels)
-    reset_by_channel['Hard reset'] = [0] * 3
-    reset_by_channel['Soft reset'] = [1] * 3
-    for link_counter in range(NELINKS): reset_by_channel['Aligner Ch%i (32 bit)'%link_counter] = [IDLEWORD] * 3
-    reset_by_channel['Fast Command (8 bit)'] = [CMD_IDLE] * 3
-
+    counters,reset_by_channel = fill_by_channel(counters,[0]*3,[1]*3, [[IDLEWORD] * 3]*NELINKS,[CMD_IDLE]*3)
     # end
-    end_by_channel = dict.fromkeys(channels)
-    end_by_channel['Hard reset'] = [1]
-    end_by_channel['Soft reset'] = [1]
-    for link_counter in range(NELINKS): end_by_channel['Aligner Ch%i (32 bit)'%link_counter] = ['{0:08X}'.format(int('{0:032b}'.format(ONEWORD_HEX),base=2))]
-    end_by_channel['Fast Command (8 bit)'] = [CMD_ALLONE] 
+    endwords = ['{0:08X}'.format(int('{0:032b}'.format(ONEWORD_HEX),base=2))]
+    counters,end_by_channel = fill_by_channel(counters,[1],[1],[endwords]*NELINKS,[CMD_ALLONE])
     
-    # dataDAQ
-    data_by_channel = dict.fromkeys(channels)
-    data_by_channel['Hard reset'] = []
-    data_by_channel['Soft reset'] = []
-    data_by_channel['Fast Command (8 bit)'] = []
-    roc_buffer_by_link = make_dataset(args,num_events)
-
-    # event buffer: contains the index of the event number to read from the roc_buffer
-    event_buffer = []
-
-    # delay_buffer: contians when to read events in the event_buffer
-    delay_buffer = []
-
     # the data that ECON sees
+    data_hard_resets = []
+    data_soft_resets = []
+    data_commands = []
     roc_data_by_link = dict()
     for link_counter in range(NELINKS): roc_data_by_link[link_counter] = []
+    roc_buffer_by_link = make_dataset(args,num_events)
 
-    # counters
-    roc_counter = 0
-    buffer_counter = 0
-    event_counter = 0
+    # buffers
+    # event buffer: contains the index of the event number to read from the roc_buffer
+    event_buffer = []
+    # delay_buffer: contains when to read events in the event_buffer
+    delay_buffer = []
 
     # loop over fast commands (or BX)
     num_bx = args.N
@@ -292,9 +287,9 @@ def make_eportRX_input(args):
         bx_ = commands[bx_counter]['BX'] if len(commands)>bx_counter else count_bx(bx_counter,command_)
 
         # fill in other columns
-        data_by_channel['Hard reset'].append(1)
-        data_by_channel['Soft reset'].append(1)
-        data_by_channel['Fast Command (8 bit)'].append(command_)
+        data_hard_resets.append(1)
+        data_soft_resets.append(1)
+        data_commands.append(command_)
         
         # if L1A then pull event out of daq buffer to event buffer
         if command_ == CMD_L1A:
@@ -323,28 +318,27 @@ def make_eportRX_input(args):
             delay_buffer.append({'globalBX':bx_counter,
                                  'start':start,
                                  'end':start+NWORDS-1,
-                                 'event':roc_counter
+                                 'event':counters['roc']
                                  })
             # print('events in buffer',event_buffer)
 
             # increase roc buffer counter every time we see an l1a
-            roc_counter +=1
+            counters['roc'] +=1
             
         # if ECR, then reset the event counter 
         if command_ == CMD_ECR:
-            event_counter = 1
+            counters['event'] = 1
 
         # if EBR, then reset the event buffer
         if command_ == CMD_EBR:
-            #print('send ebr ',bx_counter,event_buffer,' buffer_counter ',buffer_counter)
-            if buffer_counter>0:
+            if counters['buffer']>0:
                 event_buffer = [event_buffer[0]]
                 delay_buffer = [delay_buffer[0]]
-                event_counter = 1
+                counters['event'] = 1
             else:
                 event_buffer = [] # not clear just get the first out?
                 delay_buffer = []
-                event_counter = 1
+                counters['event'] = 1
             #print(event_buffer)
 
         # replace num_bx with the last event to read
@@ -368,7 +362,7 @@ def make_eportRX_input(args):
                 # header word
                 header_word = '0101'
                 header_word +=  '{0:012b}'.format(bx & 0b111111111111) # bx
-                header_word += '{0:06b}'.format(event_counter & 0b111111) # event
+                header_word += '{0:06b}'.format(counters['event'] & 0b111111) # event
                 header_word += '{0:03b}'.format(orbit & 0b111) # orbit
                 header_word += '{0:01b}'.format(random.getrandbits(1)) # H1
                 header_word += '{0:01b}'.format(random.getrandbits(1)) # H2
@@ -377,7 +371,7 @@ def make_eportRX_input(args):
 
                 # convert to hex
                 for link_counter in range(NELINKS):
-                    word = roc_buffer_by_link[event_read][link_counter][buffer_counter]
+                    word = roc_buffer_by_link[event_read][link_counter][counters['buffer']]
                     if word=='HDR':
                         word = header_word
                     # calculate the CRC (polynomial 0x104c11db7) for full list of daq words (input last 32 bit packet with data)
@@ -393,20 +387,21 @@ def make_eportRX_input(args):
                     word = '{0:08X}'.format(int(word,base=2))
                     roc_data_by_link[link_counter].append(word)
 
-                buffer_counter +=1
+                counters['buffer'] +=1
                 is_reading_buffer = True
 
                 event_buffer[0].append( roc_data_by_link[0][-1] )
 
                 if len(event_buffer[0])==NWORDS:
                     # increase event counter
-                    event_counter +=1
+                    counters['event'] +=1
+                    print(counters['event'])
                     
                     event_buffer.pop(0)
                     delay_buffer.pop(0)
 
-                    # reset buffer counter
-                    buffer_counter=0
+                    # reset buffer counter to 0
+                    counters['buffer']=0
                 
         if not is_reading_buffer:
             for link_counter in range(NELINKS):
@@ -414,11 +409,10 @@ def make_eportRX_input(args):
                 roc_data_by_link[link_counter].append(idle_word)
 
         bx_counter+=1 # end while loop
-                    
-    # append channel data
-    for link_counter in range(NELINKS):
-        data_by_channel['Aligner Ch%i (32 bit)'%link_counter] = roc_data_by_link[link_counter]
 
+    # create data by channel
+    counters,data_by_channel = fill_by_channel(counters,data_hard_resets,data_soft_resets,roc_data_by_link,data_commands)
+        
     # creating dataframes
     df_start = pd.DataFrame.from_dict(start_by_channel)
     df_reset = pd.DataFrame.from_dict(reset_by_channel)
@@ -448,7 +442,7 @@ def make_eportRX_input(args):
     output_file = open('rocData/%s.csv'%file_name, 'w')
     description = "# Provides a simple reset and then %i fast commands"%num_bx
     if L1a_name!='':
-        description+=" with %i event packets (with %i BXs of delay)\n"%(event_counter,args.delay)
+        description+=" with %i event packets (with %i BXs of delay)\n"%(counters['event'],args.delay)
         description += "# The data idle word will contain the special 0x9 header for BC0\n"
     else:
         description+="\n"
