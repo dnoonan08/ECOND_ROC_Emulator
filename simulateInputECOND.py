@@ -9,7 +9,7 @@ import warnings
 import glob
 
 ###############################################
-# ROC Emulation response 
+# ROC Emulation response
 ###############################################
 #
 # arguments:
@@ -62,11 +62,18 @@ def generate_L1a_fast_commands(args):
     L1a_bxs = []
     L1a_counter = 0
     L1a_name = ''
+
+    if args.L1aBX!='':
+        L1a_bxs = [int(bx) for bx in args.L1aBX.split(',')]
+        print('L1a bxs ',np.array(L1a_bxs))
+        L1a_name = f'{len(L1a_bxs)}L1As-customSeq'
+        return np.array(L1a_bxs),L1a_name
+
     for i,sequence in enumerate(sequences):
         num = int(L1a_nums[i]) if (len(L1a_nums)>i and L1a_nums[i]!='') else -1
         freq = int(L1a_freqs[i]) if (len(L1a_freqs)>i and L1a_freqs[i]!='') else 53 # default freq
         maxn = num if num>-1 else args.N
-        
+
         bxs=[]
         if sequence=='fixed':
             bxs = np.array([(j+1)*freq for j in range(L1a_counter,L1a_counter+maxn) if (j+1)*freq<args.N])
@@ -77,14 +84,14 @@ def generate_L1a_fast_commands(args):
             bxs = np.random.choice(np.arange(L1a_counter,L1a_counter+maxn), np.random.poisson(maxn*1./freq), replace=False)
         else:
             print('no such sequence')
-            
+
         if len(bxs)>0:
             L1a_bxs.extend(bxs)
             L1a_name += str(len(bxs)) + 'L1As-' + sequence + 'freq' + str(freq)
             L1a_counter = maxn
-            
+
     print('L1a bxs ',np.array(L1a_bxs))
-    
+
     return np.array(L1a_bxs),L1a_name
 
 def count_bx(i,fast_command):
@@ -99,7 +106,7 @@ def count_orbit(i,fast_command):
 
 def generate_fast_commands(args):
     N = args.N
-    
+
     fast_commands = np.array([CMD_IDLE] * N, dtype='object')
 
     if args.bcr:
@@ -110,7 +117,7 @@ def generate_fast_commands(args):
             bcr_bxs += [2000]
         # missing bcrs
         if args.missing_bcr:
-            bcr_bxs.pop(0)        
+            bcr_bxs.pop(0)
         fast_commands[bcr_bxs] = CMD_BCR
 
     if args.bocr:
@@ -135,13 +142,13 @@ def generate_fast_commands(args):
         # print('l1a bxs after 4 ',L1a_bxs_after4)
         ebr_bxs = [int(ebr) for ebr in args.ebrBX.split(',') if int(ebr) not in L1a_bxs_after4]
         fast_commands[ebr_bxs] = CMD_EBR
-        
+
     # command - orbit - bx - globalBx
     commands = [{'fc': fast_command,
                  'orbit': count_orbit(i,fast_command),
                  'BX': count_bx(i,fast_command),
                  'globalBX': i}  for i,fast_command in enumerate(fast_commands)]
-    
+
     return commands,L1a_name,num_events
 
 def make_dataset(args,num_events):
@@ -178,13 +185,13 @@ def make_dataset(args,num_events):
         # packet count: from 0 to 15 and then rolls over
         # 4 bit: 0000 to 1111 (from 0 to 15)
         if packet_counter==16: packet_counter = 0
-        
+
         data_by_link = dict()
-        for link_counter in range(NELINKS): # link counter 
+        for link_counter in range(NELINKS): # link counter
             data_by_link[link_counter] = []
             # word counter: 0-41
             for word_counter,word_type in enumerate(words):
-                
+
                 if word_type=='HDR':
                     word = 'HDR' # place-holder, so that we can replace with bx and orbit when L1A is called
                 elif word_type=='CM':
@@ -232,7 +239,7 @@ def make_dataset(args,num_events):
     return roc_buffer
 
 def make_eportRX_input(args):
-    
+
     # produce idle fast commands w. other fast commands
     commands, L1a_name, num_events = generate_fast_commands(args)
 
@@ -264,7 +271,7 @@ def make_eportRX_input(args):
     # end
     endwords = ['{0:08X}'.format(int('{0:032b}'.format(ONEWORD_HEX),base=2))]
     counters,end_by_channel = fill_by_channel(counters,[1],[1],[endwords]*NELINKS,[CMD_ALLONE])
-    
+
     # the data that ECON sees
     data_hard_resets = []
     data_soft_resets = []
@@ -290,7 +297,7 @@ def make_eportRX_input(args):
         data_hard_resets.append(1)
         data_soft_resets.append(1)
         data_commands.append(command_)
-        
+
         # if L1A then pull event out of daq buffer to event buffer
         if command_ == CMD_L1A:
             # set delay
@@ -308,7 +315,7 @@ def make_eportRX_input(args):
                 else:
                     delay=args.delay-num_words_until_end
                 start=delay_buffer[-1]['start']+NWORDS+delay
-                
+
             print('L1A at BX: ',bx_counter,' Events in buffer: ',len(event_buffer),' Latency delay: ',delay,' Start reading this evt at: ',start,' End at ',start+NWORDS-1)
 
             # appends empty list that later fills
@@ -324,8 +331,8 @@ def make_eportRX_input(args):
 
             # increase roc buffer counter every time we see an l1a
             counters['roc'] +=1
-            
-        # if ECR, then reset the event counter 
+
+        # if ECR, then reset the event counter
         if command_ == CMD_ECR:
             counters['event'] = 1
 
@@ -344,7 +351,7 @@ def make_eportRX_input(args):
         # replace num_bx with the last event to read
         if len(delay_buffer)>0 and delay_buffer[-1]['end']>=args.N:
             num_bx = delay_buffer[-1]['end']+1
-            
+
         # read event buffer, read one word in one BX
         is_reading_buffer = False
         if len(event_buffer)>0:
@@ -352,8 +359,8 @@ def make_eportRX_input(args):
             start_read = delay_buffer[0]['start']
             end_read = delay_buffer[0]['end']
             event_read = delay_buffer[0]['event']
-            
-            bx = commands[bx_read]['BX'] 
+
+            bx = commands[bx_read]['BX']
             orbit = commands[bx_read]['orbit']
 
             if bx_counter>=start_read and bx_counter<=end_read:
@@ -395,14 +402,14 @@ def make_eportRX_input(args):
                 if len(event_buffer[0])==NWORDS:
                     # increase event counter
                     counters['event'] +=1
-                    print(counters['event'])
-                    
+                    # print(counters['event'])
+
                     event_buffer.pop(0)
                     delay_buffer.pop(0)
 
                     # reset buffer counter to 0
                     counters['buffer']=0
-                
+
         if not is_reading_buffer:
             for link_counter in range(NELINKS):
                 idle_word = IDLEWORD_BC0 if bx_==0 else IDLEWORD
@@ -412,7 +419,7 @@ def make_eportRX_input(args):
 
     # create data by channel
     counters,data_by_channel = fill_by_channel(counters,data_hard_resets,data_soft_resets,roc_data_by_link,data_commands)
-        
+
     # creating dataframes
     df_start = pd.DataFrame.from_dict(start_by_channel)
     df_reset = pd.DataFrame.from_dict(reset_by_channel)
@@ -438,7 +445,7 @@ def make_eportRX_input(args):
         file_name += "_webrBX" + args.ebrBX.replace(',','-')
     if args.physicsdata:
         file_name += "_physicsdata"
-        
+
     output_file = open('rocData/%s.csv'%file_name, 'w')
     description = "# Provides a simple reset and then %i fast commands"%num_bx
     if L1a_name!='':
@@ -446,6 +453,9 @@ def make_eportRX_input(args):
         description += "# The data idle word will contain the special 0x9 header for BC0\n"
     else:
         description+="\n"
+
+    if 'customSeq' in L1a_name:
+        description += f"# L1As issued in BX {args.L1aBX}\n"
 
     output_file.write(description)
     output_file.write("# "+",".join(channels)+"\n")
@@ -458,7 +468,7 @@ def make_eportRX_input(args):
     output_file.write("# end\n")
     df_end.to_csv(output_file, index=False, header=False)
     output_file.close()
-    
+
 if __name__=='__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-N', type=int, default = 10000, dest="N", help="Number of BX to use (default: 10000)")
@@ -470,18 +480,19 @@ if __name__=='__main__':
     parser.add_argument('--ecrBX', type=str, default='', dest="ecrBX", help="Send ECRs in these global BXs")
     parser.add_argument('--ebr', action='store_true', default= False, dest="ebr", help="Send EBRs")
     parser.add_argument('--ebrBX', type=str, default='', dest="ebrBX", help="Send EBRs in these global BXs")
-    
+
     parser.add_argument('--delay', type=int, default = 7,dest="delay", help="ROC delay to respond to L1A (in BXs)")
 
     parser.add_argument('--sequence', type=str, default='', dest="sequence", help="Sequence of L1A patterns to send (separated by ,)")
     parser.add_argument('--nL1a', type=str, default='', dest="nL1a", help="Length of L1A patterns sent")
     parser.add_argument('--L1a_freq', type=str, default='', dest="L1a_freq", help="Send L1As with a frequency of 1 in L1A_freq")
+    parser.add_argument('--L1aBX', type=str, default='', dest='L1aBX', help='Send L1As in these global BXs.  If specified, this overrides options in other L1A arguments')
     parser.add_argument('--zero-data',  action='store_true', default=False, dest="zerodata", help="send zero data in L1A")
     parser.add_argument('--physics-data',  action='store_true', default=False, dest="physicsdata", help="use physics data from MC in L1A")
-    
+
     parser.add_argument('--waferCoor', type=str, default="0,1,5,3,1", dest='waferCoordinates', help='coordinates of wafer to data to load from MC: subdet,zside,layer,waferU,waferV; as a comma separated list')
     parser.add_argument('--fname', type=str, default='', dest="fname", help="MC filename")
-    
+
     args = parser.parse_args()
 
     make_eportRX_input(args)
