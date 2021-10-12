@@ -14,6 +14,12 @@ python3 simulateInputECOND.py -N 10692 --bcr --sequence fixed --L1a_freq 50 --nL
 ```
 note that `fixed` needs L1a_freq and nL1a
 
+- to issue L1As in a custom defined list of BX
+```
+python3 simulateInputECOND.py -N 10692 --bcr --L1aBX L1aBX 5,7,10,15,35,99,500
+```
+When this option is used, the other L1A arguments, such as sequence, frequency, and number, are ignored in favor of issuing L1As only in the BX defined in the list
+
 - to send data taken from MC events:
 ```
 python3 simulateInputECOND.py -N 10692 --bcr --sequence fixed --L1a_freq 50 --nL1a 3 --physics-data
