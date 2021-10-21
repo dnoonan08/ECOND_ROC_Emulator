@@ -383,7 +383,7 @@ def make_eportRX_input(args):
                         word = header_word
                     # calculate the CRC (polynomial 0x104c11db7) for full list of daq words (input last 32 bit packet with data)
                     if word=='CRC':
-                        daqvals = [header_word if w=='HDR' else w for w in roc_buffer_by_link[event_read][link_counter][0:39]]
+                        daqvals = [hex(int(header_word,2))[2:] if w=='HDR' else hex(int(w,2))[2:] for w in roc_buffer_by_link[event_read][link_counter][0:39]]
                         import crcmod,codecs
                         crc = crcmod.mkCrcFun(0x104c11db7,initCrc=0, xorOut=0, rev=False)
                         crcword = crc(codecs.decode((''.join(daqvals)), 'hex'))
