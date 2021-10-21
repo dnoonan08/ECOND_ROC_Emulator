@@ -55,6 +55,9 @@ IDLEWORD_BC0 = '9CCCCCCC'
 IDLEWORD = 'ACCCCCCC'
 ONEWORD_HEX = 0xffffffff
 
+import crcmod,codecs
+crc = crcmod.mkCrcFun(0x104c11db7,initCrc=0, xorOut=0, rev=False)
+
 def generate_L1a_fast_commands(args):
     sequences = args.sequence.split(',')
     L1a_nums = args.nL1a.split(',')
@@ -385,8 +388,7 @@ def make_eportRX_input(args):
                     if word=='CRC':
                         #calculate crc based on last 39 words of the data
                         daqvals = roc_data_by_link[link_counter][-39:]
-                        import crcmod,codecs
-                        crc = crcmod.mkCrcFun(0x104c11db7,initCrc=0, xorOut=0, rev=False)
+
                         crcword = crc(codecs.decode((''.join(daqvals)), 'hex'))
                         word = '{0:032b}'.format(crcword)
                     # debug for elink2
