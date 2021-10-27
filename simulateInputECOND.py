@@ -199,7 +199,7 @@ def make_dataset(args,num_events):
                     word = 'HDR' # place-holder, so that we can replace with bx and orbit when L1A is called
                 elif word_type=='CM':
                     if args.physicsdata or args.zerodata:
-                        word = '10'
+                        word = '00'
                         word += '{0:010b}'.format(0)
                         word += '{0:010b}'.format(random.getrandbits(10)) # ADC-CM0
                         word += '{0:010b}'.format(random.getrandbits(10)) # ADC-CM1
