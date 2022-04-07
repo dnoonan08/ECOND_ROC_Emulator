@@ -254,6 +254,9 @@ def make_eportRX_input(args):
         'event': 0,
         }
 
+    #bool to decide if there are hamming errors
+    hammingErrors=args.hamErrRate>0
+
     # output data
     channels = ['Hard reset', 'Soft reset']
     for link_counter in range(NELINKS): channels.append('Aligner Ch%i (32 bit)'%link_counter)
@@ -375,9 +378,10 @@ def make_eportRX_input(args):
                 header_word +=  '{0:012b}'.format(bx & 0b111111111111) # bx
                 header_word += '{0:06b}'.format(counters['event'] & 0b111111) # event
                 header_word += '{0:03b}'.format(orbit & 0b111) # orbit
-                header_word += '{0:01b}'.format(random.getrandbits(1)) # H1
-                header_word += '{0:01b}'.format(random.getrandbits(1)) # H2
-                header_word += '{0:01b}'.format(random.getrandbits(1)) # H3
+                if random.random()<args.hamErrRate:
+                    header_word += '{0:03b}'.format(random.randInt(1,8)) # three bit hamming code from HGCROC
+                else:
+                    header_word += '000'
                 header_word += '0101'
 
                 # convert to hex
@@ -485,6 +489,8 @@ if __name__=='__main__':
     parser.add_argument('--ebrBX', type=str, default='', dest="ebrBX", help="Send EBRs in these global BXs")
 
     parser.add_argument('--delay', type=int, default = 7,dest="delay", help="ROC delay to respond to L1A (in BXs)")
+
+    parser.add_argument('--hamErrRate', type=float, default=0., dest="hamErrRate", help="Rate at which hamming errors will be issued in link data headers (0 means no errors)")
 
     parser.add_argument('--sequence', type=str, default='', dest="sequence", help="Sequence of L1A patterns to send (separated by ,)")
     parser.add_argument('--nL1a', type=str, default='', dest="nL1a", help="Length of L1A patterns sent")
