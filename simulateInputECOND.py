@@ -201,8 +201,9 @@ def make_dataset(args,num_events):
                     if args.physicsdata or args.zerodata:
                         word = '00'
                         word += '{0:010b}'.format(0)
-                        word += '{0:010b}'.format(random.getrandbits(10)) # ADC-CM0
-                        word += '{0:010b}'.format(random.getrandbits(10)) # ADC-CM1
+                        cm0,cm1=np.random.normal(20,10,2).astype(int)
+                        word += '{0:010b}'.format(max(0,cm0)) # ADC-CM0
+                        word += '{0:010b}'.format(max(0,cm1)) # ADC-CM1
                     else:
                         word = '{0:04b}'.format(packet_counter) # 4b count number
                         word += '{0:04b}'.format(link_counter+1) # 4b elink number
@@ -492,7 +493,7 @@ if __name__=='__main__':
     parser.add_argument('--zero-data',  action='store_true', default=False, dest="zerodata", help="send zero data in L1A")
     parser.add_argument('--physics-data',  action='store_true', default=False, dest="physicsdata", help="use physics data from MC in L1A")
 
-    parser.add_argument('--waferCoor', type=str, default="0,1,5,3,1", dest='waferCoordinates', help='coordinates of wafer to data to load from MC: subdet,zside,layer,waferU,waferV; as a comma separated list')
+    parser.add_argument('--waferCoor', type=str, default="8,1,5,3,1", dest='waferCoordinates', help='coordinates of wafer to data to load from MC: subdet,zside,layer,waferU,waferV; as a comma separated list')
     parser.add_argument('--fname', type=str, default='', dest="fname", help="MC filename")
 
     args = parser.parse_args()
