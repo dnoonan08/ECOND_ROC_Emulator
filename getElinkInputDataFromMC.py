@@ -89,4 +89,5 @@ def loadMCData(fName = 'root://cmseos.fnal.gov//store/user/lpchgcal/Concentrator
 
 
 if __name__=="__main__":
-    dfLinks, df = loadMCData(returnCellDF=True)
+    dfLinks, df = loadMCData(fName='InputNtuples/ntuple.root',
+                             returnCellDF=True)
